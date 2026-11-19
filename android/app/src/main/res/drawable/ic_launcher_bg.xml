@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hintergrund: Flusswasser mit Wellen -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="54" android:startY="0" android:endX="54" android:endY="108"><item android:offset="0" android:color="#FF6FD3FF" /><item android:offset="1" android:color="#FF1F7FC4" /></gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#55FFFFFF" android:pathData="M0,30 C12,26 24,34 36,30 C48,26 60,34 72,30 C84,26 96,34 108,30 L108,33 C96,37 84,29 72,33 C60,37 48,29 36,33 C24,37 12,29 0,33 Z" />
+    <path android:fillColor="#55FFFFFF" android:pathData="M0,82 C12,78 24,86 36,82 C48,78 60,86 72,82 C84,78 96,86 108,82 L108,85 C96,89 84,81 72,85 C60,89 48,81 36,85 C24,89 12,81 0,85 Z" />
+</vector>

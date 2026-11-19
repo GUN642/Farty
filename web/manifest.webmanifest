@@ -1,0 +1,12 @@
+{
+  "name": "Farty – Das Pups-Floß",
+  "short_name": "Farty",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#2b9bd8",
+  "theme_color": "#2b9bd8",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

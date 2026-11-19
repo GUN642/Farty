@@ -1,0 +1,233 @@
+package io.github.gun642.farty;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.net.wifi.WifiManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.InputDevice;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+
+import androidx.webkit.WebViewAssetLoader;
+
+/**
+ * Hüllt das Browserspiel (assets/www) in eine Vollbild-WebView, stellt den LAN-Mehrspieler bereit
+ * und prüft beim Start auf Updates. Controller (z. B. Nintendo Switch Pro Controller oder Joy-Cons
+ * am Android TV) kommen über die Gamepad-Schnittstelle der WebView direkt im Spiel an.
+ */
+public class MainActivity extends Activity {
+    private static final String HOST = "appassets.androidplatform.net";
+    private static final String START_URL = "https://" + HOST + "/assets/www/index.html";
+
+    private WebView web;
+    private UpdateManager updater;
+    private boolean lastKeyFromGamepad;
+    private final LanNet net = new LanNet();
+    private WifiManager.MulticastLock mcLock;
+
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= 28) {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
+
+        web = new WebView(this);
+        web.setBackgroundColor(0xFF2B9BD8);
+        FrameLayout root = new FrameLayout(this);
+        root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(root);
+        hideSystemUi();
+
+        final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return loader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri u = request.getUrl();
+                if (HOST.equals(u.getHost())) return false;
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, u));
+                } catch (Exception ignored) {
+                }
+                return true;
+            }
+        });
+
+        // Standard-Dialoge (prompt/alert) der Seite zulassen
+        web.setWebChromeClient(new WebChromeClient());
+
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        // Spieldateien liegen in der APK: nie aus dem WebView-Cache laden, sonst bleiben nach einem Update alte Dateien aktiv
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        android.content.SharedPreferences prefs = getSharedPreferences("app", 0);
+        if (prefs.getInt("cacheVersion", -1) != BuildConfig.VERSION_CODE) {
+            web.clearCache(true);
+            prefs.edit().putInt("cacheVersion", BuildConfig.VERSION_CODE).apply();
+        }
+
+        web.addJavascriptInterface(new Bridge(), "AndroidApp");
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
+        web.requestFocus();
+
+        if (savedInstanceState != null) web.restoreState(savedInstanceState);
+        else web.loadUrl(START_URL);
+
+        updater = new UpdateManager(this);
+        updater.check(false);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        web.saveState(outState);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        web.onResume();
+        hideSystemUi();
+        updater.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        web.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        net.shutdown();
+        multicast(false);
+        if (web != null) web.destroy();
+        super.onDestroy();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemUi();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void hideSystemUi() {
+        View d = getWindow().getDecorView();
+        d.setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int src = event.getSource();
+        lastKeyFromGamepad = (src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                || (src & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+        return super.dispatchKeyEvent(event);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onBackPressed() {
+        // Controller-Taste B soll das Spiel nicht beenden (das Spiel wertet B selbst aus)
+        if (lastKeyFromGamepad) return;
+        web.evaluateJavascript(
+                "(function(){var g=window.game;if(!g)return 'menu';return g.onBack?g.onBack():'menu';})()",
+                value -> {
+                    if (value != null && value.contains("menu")) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Farty beenden?")
+                                .setPositiveButton("Beenden", (d, w) -> finish())
+                                .setNegativeButton("Weiterspielen", null)
+                                .show();
+                    }
+                });
+    }
+
+    /** Schnittstelle für JavaScript (window.AndroidApp). */
+    private class Bridge {
+        /** Läuft die App auf einem Fernseher (Android TV)? Dann wählt das Spiel die einfache Grafik. */
+        @JavascriptInterface
+        public boolean isTv() {
+            try {
+                android.app.UiModeManager ui = (android.app.UiModeManager) getSystemService(Context.UI_MODE_SERVICE);
+                if (ui != null && ui.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION) return true;
+                return getPackageManager().hasSystemFeature("android.software.leanback");
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface public String getVersionName() { return BuildConfig.VERSION_NAME; }
+        @JavascriptInterface public int getVersionCode() { return BuildConfig.VERSION_CODE; }
+        @JavascriptInterface public void checkForUpdates() { runOnUiThread(() -> updater.check(true)); }
+        @JavascriptInterface public void exitApp() { runOnUiThread(() -> finish()); }
+
+        // ---- LAN-Mehrspieler (siehe LanNet)
+        @JavascriptInterface public String deviceName() { return Build.MODEL == null ? "Android" : Build.MODEL; }
+        @JavascriptInterface public String netHost(String info) { multicast(true); return net.host(info); }
+        @JavascriptInterface public void netInfo(String info) { net.setInfo(info); }
+        @JavascriptInterface public void netJoin(String ip, int port) { net.join(ip, port); }
+        @JavascriptInterface public void netSend(int peer, String msg) { net.send(peer, msg); }
+        @JavascriptInterface public void netKick(int peer) { net.kick(peer); }
+        @JavascriptInterface public String netPoll() { return net.poll(); }
+        @JavascriptInterface public void netScan(boolean on) { if (on) multicast(true); net.scan(on); }
+        @JavascriptInterface public String netHosts() { return net.hostsJson(); }
+        @JavascriptInterface public String netIp() { return LanNet.localIp(); }
+        @JavascriptInterface public void netStop() { net.stop(); net.scan(false); multicast(false); }
+    }
+
+    /** Manche Geräte filtern Broadcasts im WLAN, solange keine Multicast-Sperre gehalten wird. */
+    private synchronized void multicast(boolean on) {
+        try {
+            if (on && mcLock == null) {
+                WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                if (wm != null) {
+                    mcLock = wm.createMulticastLock("farty");
+                    mcLock.setReferenceCounted(false);
+                    mcLock.acquire();
+                }
+            } else if (!on && mcLock != null) {
+                mcLock.release();
+                mcLock = null;
+            }
+        } catch (Exception ignored) {
+        }
+    }
+}
