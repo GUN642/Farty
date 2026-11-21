@@ -8,6 +8,7 @@ export const PALETTE = {
   wueste: { deep: 0x1aa3c4, shallow: 0x62dbe6, foam: 0xfffbea, grass: 0xe9c47f, grass2: 0xdcae62, wall: 0xc9773f, sky: 0x8fcfff, horizon: 0xffe4b8, crown: [0x3f9b4b, 0x4fae55], trunk: 0x3f9b4b, tree: 'cactus', spikeBody: 0x3f9b4b, spike: 0xfff3c4, spikeStyle: 'cactus', rock: 0xc0703c },
   sumpf: { deep: 0x3f7a4e, shallow: 0x7aa563, foam: 0xd9efc4, grass: 0x5c7d3a, grass2: 0x4c6b2f, wall: 0x5b4a2e, sky: 0x9cc3a0, horizon: 0xd9e6c4, crown: [0x556b2f, 0x6b8e23, 0x4a5d23], trunk: 0x5a4030, tree: 'droopy', spikeBody: 0x4b5a2a, spike: 0xb36ad6, spikeStyle: 'hedge', rock: 0x6f6a5a },
   berg: { deep: 0x2489cf, shallow: 0x84dcff, foam: 0xffffff, grass: 0x7fb25a, grass2: 0x6b9e4a, wall: 0x8d8d8d, sky: 0x6fb8f0, horizon: 0xe2f3ff, crown: [0x2e6b3a, 0x3a7d46, 0x285e33], trunk: 0x6a4a2a, tree: 'pine', spikeBody: 0x7a5230, spike: 0xd9d9d9, spikeStyle: 'stakes', rock: 0x8f8f8f },
+  park: { deep: 0x1e9be8, shallow: 0x7fe3ff, foam: 0xffffff, grass: 0x7ccf52, grass2: 0x6abf45, wall: 0xf26b5b, sky: 0x6ec6ff, horizon: 0xe6f6ff, crown: [0x4caf50, 0x66bb44, 0xff9ec0, 0x3d9a3d], trunk: 0x7a5230, tree: 'round', spikeBody: 0x2f6b2a, spike: 0xe04fa0, spikeStyle: 'hedge', rock: 0x9a5a2a, support: 0x3f7bd9 },
   eis: { deep: 0x3aaed8, shallow: 0xaeefff, foam: 0xffffff, grass: 0xf2f7fb, grass2: 0xe3eef6, wall: 0xa9cfe6, sky: 0x9fd6f5, horizon: 0xf3fbff, crown: [0xdfeef3, 0xcfe3ea, 0x9cc4b0], trunk: 0x6a4a2a, tree: 'pine', spikeBody: 0xbfeaff, spike: 0xf2fdff, spikeStyle: 'ice', rock: 0xeaf6ff },
 };
 
@@ -153,7 +154,7 @@ export class World {
       const us = [-1, -0.5, 0, 0.5, 1], cols = us.length;
       const pos = [], uv = [], cur = [], rap = [], idx = [];
       for (let i = 0; i < N; i++) {
-        const hw = R.hw[i] + 0.4, nx = -R.tz[i], nz = R.tx[i];
+        const hw = R.hw[i] + (R.flume ? 0.12 : 0.4), nx = -R.tz[i], nz = R.tx[i];
         for (const u of us) {
           pos.push(R.px[i] + nx * u * hw, R.py[i], R.pz[i] + nz * u * hw);
           uv.push(u, i); cur.push(R.cur[i]); rap.push(R.rapid[i]);
@@ -173,9 +174,10 @@ export class World {
       this.add(new THREE.Mesh(g, this.waterMat));
     }
 
+    if (R.flume) this.buildFlume(rand);
     // ---------------- Ufer (beidseitig): Wand, Wiese, Hügel
     const grass = new THREE.Color(P.grass), grass2 = new THREE.Color(P.grass2), wall = new THREE.Color(P.wall), tmp = new THREE.Color();
-    for (const sg of [1, -1]) {
+    for (const sg of (R.flume ? [] : [1, -1])) {
       const pos = [], col = [], idx = [];
       const step = 2;
       let rowsN = 0, ni = 0;
@@ -203,7 +205,7 @@ export class World {
       this.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
     }
     // Wasserfläche vor dem Start und hinter dem Ziel abschließen
-    for (const [i, dir] of [[0, -1], [N - 1, 1]]) {
+    for (const [i, dir] of (R.flume ? [] : [[0, -1], [N - 1, 1]])) {
       const w = R.hw[i] * 2 + 140, g = new THREE.BoxGeometry(30, 40, w);
       const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: P.grass }));
       m.position.set(R.px[i] + R.tx[i] * dir * 15, R.py[i] - 18.8, R.pz[i] + R.tz[i] * dir * 15);
@@ -246,10 +248,10 @@ export class World {
         for (let s = 2; s < N - 2; s += 3.2 / deco) {
           const i = Math.floor(s + rand() * 2);
           if (i >= N) break;
-          const off = 2.2 + Math.pow(rand(), 1.6) * 70;
+          const off = (R.flume ? 4 : 2.2) + Math.pow(rand(), 1.6) * 70;
           if (R.spiky[i] & (sg > 0 ? 1 : 2) && off < 3.5) continue;
           const hw = R.hw[i], nx = -R.tz[i] * sg, nz = R.tx[i] * sg;
-          const x = R.px[i] + nx * (hw + off), z = R.pz[i] + nz * (hw + off), y = R.py[i] + this.bankY(off, this.hill(i, sg));
+          const x = R.px[i] + nx * (hw + off), z = R.pz[i] + nz * (hw + off), y = R.flume ? this.groundY : R.py[i] + this.bankY(off, this.hill(i, sg));
           if (rand() < 0.22) rocks.push({ x, y, z, s: 0.5 + rand() * 1.4 });
           else trees.push({ x, y, z, s: 0.75 + rand() * 0.7 });
         }
@@ -294,10 +296,11 @@ export class World {
     // ---------------- Hindernisse
     const rocksO = R.obstacles.filter((o) => o.type === 'rock');
     if (rocksO.length) {
-      const ice = R.theme === 'eis';
-      const im = new THREE.InstancedMesh(ice ? new THREE.CylinderGeometry(1, 1.05, 1, 7) : new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: ice ? 0xeaf6ff : P.rock, flatShading: true }), rocksO.length);
+      const ice = R.theme === 'eis', barrel = R.theme === 'park';
+      const im = new THREE.InstancedMesh(ice ? new THREE.CylinderGeometry(1, 1.05, 1, 7) : barrel ? new THREE.CylinderGeometry(0.9, 0.9, 1.6, 12) : new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: ice ? 0xeaf6ff : P.rock, flatShading: true }), rocksO.length);
       rocksO.forEach((o, k) => {
         const i = clamp(Math.round(o.s), 0, N - 1);
+        if (barrel) { im.setMatrixAt(k, M4(o.x, R.py[i] + 0.3, o.z, o.r, 1, o.r, 0, o.rot, 0)); return; }
         im.setMatrixAt(k, ice ? M4(o.x, R.py[i] + 0.15, o.z, o.r, 0.5, o.r, 0, o.rot, 0) : M4(o.x, R.py[i] - 0.1, o.z, o.r * 1.05, o.h, o.r * 1.05, 0.2, o.rot, 0.1));
       });
       this.add(im);
@@ -414,6 +417,69 @@ export class World {
     gate(START, 'start');
     R.checkpoints.forEach((s) => gate(s, 'cp'));
     gate(R.finish, 'finish');
+  }
+
+  // Wildwasserbahn: Rinne auf Stelzen hoch über dem Boden, an offenen Stellen ohne Wand
+  buildFlume(rand) {
+    const R = this.river, P = this.P, N = R.N;
+    let minY = 0, x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (let i = 0; i < N; i++) { minY = Math.min(minY, R.py[i]); x0 = Math.min(x0, R.px[i]); x1 = Math.max(x1, R.px[i]); z0 = Math.min(z0, R.pz[i]); z1 = Math.max(z1, R.pz[i]); }
+    const gy = this.groundY = minY - 16;
+    // Boden
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 500, z1 - z0 + 500), new THREE.MeshLambertMaterial({ color: P.grass }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set((x0 + x1) / 2, gy, (z0 + z1) / 2);
+    this.add(ground);
+    // Wandhöhe je Seite (geglättet)
+    const wallH = (i, bit) => {
+      let k = 0, n = 0;
+      for (let j = i - 2; j <= i + 2; j++) { if (j < 0 || j >= N) continue; k += R.open[j] & bit ? 1 : 0; n++; }
+      const f = k / n;
+      return 1.1 * (1 - f) + 0.12 * f;
+    };
+    const inner = new THREE.Color(0xeaf7ff), rim = new THREE.Color(0xffffff), warn = new THREE.Color(0xffd23f), outer = new THREE.Color(P.wall), under = new THREE.Color(P.wall).multiplyScalar(0.6), c = new THREE.Color();
+    for (const sg of [1, -1]) {
+      const bit = sg > 0 ? 1 : 2, pos = [], col = [], idx = [];
+      const rowsN = 6;
+      for (let i = 0; i < N; i++) {
+        const hw = R.hw[i], nx = -R.tz[i] * sg, nz = R.tx[i] * sg, y0 = R.py[i], h = wallH(i, bit);
+        const openK = (1.1 - h) / 0.98;
+        const rows = [[0, -0.5, inner], [0, h, inner], [0, h, rim], [0.3, h, rim], [0.3, -1.3, outer], [-hw, -1.3, under]];
+        for (const [off, dy, cc] of rows) {
+          pos.push(R.px[i] + nx * (hw + off), y0 + dy, R.pz[i] + nz * (hw + off));
+          c.copy(cc);
+          if (cc === rim) c.lerp(warn, openK);
+          col.push(c.r, c.g, c.b);
+        }
+        if (i > 0) for (let k = 0; k < rowsN - 1; k++) { if (k === 1) continue; const a = (i - 1) * rowsN + k, b = a + rowsN; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      this.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+    }
+    // Endwände
+    for (const i of [0, N - 1]) {
+      const m = this.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.4, R.hw[i] * 2 + 0.6), new THREE.MeshLambertMaterial({ color: P.wall })));
+      m.position.set(R.px[i], R.py[i] - 0.1, R.pz[i]);
+      m.rotation.y = -Math.atan2(R.tz[i], R.tx[i]);
+    }
+    // Stelzen mit Querträger
+    const legs = [], beams = [];
+    for (let i = 3; i < N - 1; i += 7) {
+      const hw = R.hw[i], nx = -R.tz[i], nz = R.tx[i], top = R.py[i] - 1.3, h = top - gy;
+      for (const sg of [1, -1]) legs.push({ x: R.px[i] + nx * sg * (hw - 0.4), z: R.pz[i] + nz * sg * (hw - 0.4), y: gy + h / 2, h });
+      beams.push({ x: R.px[i], y: top - 0.25, z: R.pz[i], w: hw * 2, ang: Math.atan2(R.tz[i], R.tx[i]) });
+    }
+    const lm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.28, 0.34, 1, 8), new THREE.MeshLambertMaterial({ color: P.support }), legs.length);
+    legs.forEach((l, k) => lm.setMatrixAt(k, M4(l.x, l.y, l.z, 1, l.h, 1)));
+    this.add(lm);
+    const bm = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.5, 1), new THREE.MeshLambertMaterial({ color: P.support }), beams.length);
+    beams.forEach((b, k) => bm.setMatrixAt(k, M4(b.x, b.y, b.z, 1, 1, b.w, 0, -b.ang, 0)));
+    this.add(bm);
+    void rand;
   }
 
   update(t, dt, sim) {

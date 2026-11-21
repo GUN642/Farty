@@ -113,6 +113,7 @@ export class Sound {
   bump(v) { this.tone('sine', 110, 45, 0.25, 0.25 + v * 0.4); this.noise(0.15, 500, 0.15 * v + 0.05); }
   hit() { this.tone('square', 900, 300, 0.12, 0.12); this.noise(0.6, 3000, 0.25, 'highpass'); this.tone('sine', 300, 180, 0.2, 0.2, 0.05); }
   pop() { this.noise(0.5, 1800, 0.9); this.tone('sine', 140, 30, 0.6, 0.6); this.noise(1.2, 600, 0.3, 'lowpass', 0.25); }
+  fall() { this.tone('triangle', 900, 120, 1.6, 0.25); this.tone('sine', 600, 90, 1.6, 0.12, 0.1); this.noise(0.5, 300, 0.5, 'lowpass', 1.5); }
   splash() { this.noise(0.7, 1200, 0.35, 'bandpass', 0, 0.6); }
   bean() { this.tone('square', 300, 900, 0.15, 0.12); this.tone('triangle', 600, 1400, 0.18, 0.12, 0.08); this.tone('sawtooth', 60, 50, 0.35, 0.12, 0.2); }
   gold() { [784, 988, 1175, 1568].forEach((f, i) => this.tone('triangle', f, f, 0.22, 0.22, i * 0.08)); }

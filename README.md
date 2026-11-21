@@ -31,6 +31,7 @@ Steuerung per Nintendo-Switch-Controller (Pro Controller oder Joy-Cons), anderen
 | Blubbersumpf | Kaum Strömung (kräftig pupsen!), Strudel, Baumstämme, Seerosen |
 | Wildwasser | Reißende Stromschnellen, Felsen, Drehbalken |
 | Gletscherkanal | Eisschollen, Eiszapfen-Ufer, Strudel, Drehbalken |
+| Wildwasserbahn | Freizeitpark-Rinne auf Stelzen mit Steilstücken. Wo der Rand gelb ist, fehlt die Wand – wer mehr als halb über die Kante treibt, fällt runter und startet am letzten Kontrollpunkt neu |
 | Zufallsfluss | jedes Mal eine neue Strecke mit allen Hindernissen |
 
 ## Steuerung
@@ -61,7 +62,10 @@ Wie beim medevac-sim:
   Internet.
 - Lokales Spiel und Online lassen sich mischen: z. B. zwei Controller am Fernseher + ein Freund am Handy.
 - Der Host berechnet das Boot, die anderen schicken nur ihre Steuerung. Der Host wählt Fluss und Schwierigkeit.
-- Test im Browser ohne Netz: zwei Tabs mit `?net=test` öffnen.
+- Klappt die direkte WebRTC-Verbindung nicht (z. B. Mobilfunk, strenge Router), wechselt das Spiel nach einigen
+  Sekunden automatisch auf eine **Server-Verbindung** über öffentliche MQTT-Server (broker.emqx.io, broker.hivemq.com,
+  test.mosquitto.org). Dann laufen die Spieldaten über diesen Server. In der Lobby des Hosts steht, welche Wege bereitstehen.
+- Test im Browser ohne Netz: zwei Tabs mit `?net=test` öffnen. Nur Server-Weg testen: `?nopeer`.
 
 ## Technik
 
@@ -70,14 +74,16 @@ Wie beim medevac-sim:
   - `sim.js` Bootsphysik und Spielregeln (läuft beim Host)
   - `world.js`, `raft.js`, `critters.js`, `fx.js` Darstellung
   - `input.js` Tastatur, Touch, Gamepads (inkl. Kalibrierung für Switch-Controller an Android)
-  - `transport.js` Netzwerk (LAN in der App, PeerJS/WebRTC, Test-Kanal), `main.js` Ablauf, Menüs, Lobby, Protokoll
+  - `transport.js` Netzwerk (LAN in der App, PeerJS/WebRTC, Test-Kanal), `relay.js` MQTT-Ausweichverbindung, `main.js` Ablauf, Menüs, Lobby, Protokoll
   - `audio.js` alle Klänge synthetisch (Web Audio), inkl. Pups-Synthesizer
 - `android/` – WebView-Hülle (`MainActivity`), LAN-Mehrspieler (`LanNet`), Selbst-Update (`UpdateManager`)
 - `.github/workflows/build-deploy.yml` – baut bei jedem Push die APK; auf dem Standardbranch wird sie signiert und
-  zusammen mit der Web-App auf GitHub Pages veröffentlicht.
+  zusammen mit der Web-App auf GitHub Pages veröffentlicht – das passiert nur für den Branch `main`.
 
 ### Einmalige Einrichtung auf GitHub
 
+0. **Settings → General → Default branch** auf `main` stellen und unter **Settings → Environments → github-pages →
+   Deployment branches** `main` erlauben (sonst lehnt GitHub die Veröffentlichung ab).
 1. **Settings → Pages → Build and deployment → Source: „GitHub Actions“** auswählen.
    (GitHub Pages für private Repositories braucht ein kostenpflichtiges Konto – sonst das Repository öffentlich machen.)
 2. Danach den Workflow *Build & Deploy* erneut starten (Actions → Build & Deploy → Run workflow) oder etwas pushen.

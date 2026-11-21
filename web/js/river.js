@@ -30,6 +30,11 @@ export const LEVELS = [
     sections: { rocks: 1.6, spiky: 2.2, bars: 1.8, whirl: 1.2, buoys: 1.6, rapids: 1 },
   },
   {
+    id: 'bahn', name: 'Wildwasserbahn', desc: 'Freizeitpark-Rinne hoch über dem Boden – wo die Wand fehlt, fällt man seitlich runter!', theme: 'park', flume: true,
+    length: 620, hw: [5.2, 6.6], curve: 1.3, current: 3.0, slope: 0.035,
+    sections: { open: 3.2, drop: 1.4, bars: 0.7, buoys: 0.9, calm: 0.5 },
+  },
+  {
     id: 'zufall', name: 'Zufallsfluss', desc: 'Jedes Mal eine neue Strecke – mit allem, was der Fluss hergibt.', theme: 'random', random: true,
     length: 650, hw: [6, 10], curve: 1.1, current: 2.6, slope: 0.015,
     sections: { calm: 0.6, rocks: 1.6, spiky: 1.4, whirl: 1, bars: 1.2, rapids: 1, logs: 1, buoys: 1.2 },
@@ -63,6 +68,8 @@ export class River {
     this.tx = new Float32Array(N); this.tz = new Float32Array(N);
     this.hw = new Float32Array(N); this.cur = new Float32Array(N);
     this.spiky = new Uint8Array(N);   // Bit 1: Seite +n, Bit 2: Seite −n
+    this.open = new Uint8Array(N);    // Wildwasserbahn: Seite ohne Wand (Bit 1/2 wie oben) – dort fällt man runter
+    this.flume = !!def.flume;
     this.rapid = new Float32Array(N);
 
     // ---------- Abschnitte festlegen
@@ -102,9 +109,10 @@ export class River {
       let w = lerp(def.hw[0], def.hw[1], n);
       let cu = def.current, sl = def.slope, rp = 0;
       if (q.type === 'rapids') { w *= 0.88; cu *= 1.45; sl *= 4; rp = 1; }
+      else if (q.type === 'drop') { cu *= 1.6; sl *= 5; rp = 1; }
       else if (q.type === 'whirl') { w += 2.5; cu *= 0.7; }
       else if (q.type === 'calm') { cu *= 0.9; sl *= 0.6; }
-      else if (q.type === 'start' || q.type === 'end') { w = Math.max(w, 8.5); }
+      else if (q.type === 'start' || q.type === 'end') { w = Math.max(w, def.flume ? 6.8 : 8.5); sl *= def.flume ? 0.2 : 1; }
       rawHw[i] = w; rawCur[i] = cu; rawSlope[i] = sl; rawRapid[i] = rp;
     }
     // glätten
@@ -202,6 +210,11 @@ export class River {
           const p1 = at(si, side * (w + 0.5)), p2 = at(si + R.range(-5, 5), side * (w - w * R.range(0.8, 1.15)));
           if (free((p1.x + p2.x) / 2, (p1.z + p2.z) / 2, 1)) this.obstacles.push({ type: 'log', ax: p1.x, az: p1.z, bx: p2.x, bz: p2.z, r: 0.45, s: si });
         }
+      } else if (q.type === 'open') {
+        // Wand fehlt auf einer Seite (selten auf beiden); ein paar Ränder bleiben als Leitplanke stehen
+        const side = R() < 0.18 ? 3 : R() < 0.5 ? 1 : 2;
+        for (let i = Math.floor(a) + 3; i < Math.min(N, b - 3); i++) this.open[i] |= side;
+        if (R() < 0.5) { const si = a + len * R.range(0.3, 0.7), w = hwAt(si); addBuoy(si, R.range(-w + 2, w - 2), true); }
       } else if (q.type === 'calm') {
         // ein paar Seerosen und vereinzelt ein Fels
         if (R() < 0.6) { const si = a + len / 2, w = hwAt(si); addRock(si, R.sign() * R.range(w * 0.3, w - 1.5), R.range(0.8, 1.4)); }
@@ -253,7 +266,7 @@ export class River {
     o.s = i + clamp(dx * tx + dz * tz, -0.5, 0.5);
     o.tx = tx; o.tz = tz; o.nx = -tz; o.nz = tx;
     o.lat = dx * -tz + dz * tx;
-    o.hw = this.hw[i]; o.cur = this.cur[i]; o.y = this.py[i]; o.spiky = this.spiky[i]; o.rapid = this.rapid[i];
+    o.hw = this.hw[i]; o.cur = this.cur[i]; o.y = this.py[i]; o.spiky = this.spiky[i]; o.rapid = this.rapid[i]; o.open = this.open[i];
     return o;
   }
 

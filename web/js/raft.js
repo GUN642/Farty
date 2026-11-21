@@ -74,11 +74,15 @@ export class RaftView {
   // st: Schnappschuss-Zustand (x, z, a, seats …), y: Wasserhöhe
   update(dt, t, st, y, camera, fx, sound, w, h, ownSeats) {
     const G = this.group;
-    G.position.set(st.x, y + Math.sin(t * 2.1) * 0.05, st.z);
+    const fy = st.ph === 'fallen' ? (st.fy || 0) : 0;
+    G.position.set(st.x, y + fy + Math.sin(t * 2.1) * 0.05, st.z);
     this.boat.rotation.y = -st.a;
     // Schaukeln und Neigen in Fahrtrichtung
-    this.boat.rotation.x = Math.sin(t * 1.7) * 0.04;
+    this.boat.rotation.x = Math.sin(t * 1.7) * 0.04 + (fy < 0 ? Math.min(1.2, -fy * 0.08) : 0);
     this.boat.rotation.z = Math.cos(t * 1.3) * 0.04;
+    this.shadow.visible = fy === 0;
+    if (st.ph === 'fallen' && !this.wasFallen) { this.splashT = 0; }
+    this.wasFallen = st.ph === 'fallen';
     this.ringMat.emissive.setHex(st.inv && Math.floor(t * 12) % 2 ? 0x662222 : 0x000000);
     const popped = st.ph === 'popped';
     if (popped !== this.popped) {
@@ -124,7 +128,7 @@ export class RaftView {
       const L = this.labels[i];
       if (L) {
         this._v.set(st.x + Math.cos(wa) * SEAT_R, y + 2.25, st.z + Math.sin(wa) * SEAT_R).project(camera);
-        const vis = this._v.z < 1 && !popped;
+        const vis = this._v.z < 1 && !popped && fy === 0;
         L.el.style.display = vis ? '' : 'none';
         if (vis) L.el.style.transform = `translate(${((this._v.x + 1) / 2 * w).toFixed(1)}px, ${((1 - this._v.y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`;
         const g = Math.round(gas * 40);

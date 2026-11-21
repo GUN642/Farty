@@ -33,6 +33,8 @@ export class Sim {
     this.collected = new Set();
     this.gold = 0;
     this.pops = 0;
+    this.falls = 0;
+    this.fy = 0;
     this.cpIndex = -1;
     this.events = [];
     this.hint = START;
@@ -64,7 +66,19 @@ export class Sim {
       if (after !== before && after > 0) this.ev('count', { n: after });
       if (this.countdown <= 0) { this.phase = 'race'; this.ev('go'); }
     } else if (this.phase === 'race') this.time += dt;
-    else if (this.phase === 'popped') {
+    else if (this.phase === 'fallen') {
+      // seitlich aus der Rinne gefallen: weiterfliegen und nach unten stürzen
+      this.time += dt;
+      this.fvy -= 22 * dt; this.fy += this.fvy * dt;
+      this.x += this.vx * dt; this.z += this.vz * dt; this.a += this.w * dt;
+      this.popT -= dt;
+      if (this.popT <= 0) {
+        this.phase = 'race'; this.fy = 0;
+        this.respawnAt(this.cpIndex >= 0 ? this.river.checkpoints[this.cpIndex] : START + 2);
+        this.ev('respawn');
+      }
+      return;
+    } else if (this.phase === 'popped') {
       this.popT -= dt;
       if (this.popT <= 0) {
         this.phase = 'race';
@@ -132,7 +146,17 @@ export class Sim {
 
     // ---------- Ufer
     const lim = q.hw - RAFT_R;
-    if (Math.abs(q.lat) > lim) {
+    const openSide = q.open & (q.lat > 0 ? 1 : 2);
+    if (openSide && this.phase === 'race' && Math.abs(q.lat) > q.hw - 0.4) {
+      // mehr als die Hälfte über der Kante: Absturz!
+      const sg = Math.sign(q.lat);
+      this.vx += q.nx * sg * 2.5; this.vz += q.nz * sg * 2.5;
+      this.phase = 'fallen'; this.popT = 2.6; this.fy = 0; this.fvy = 3; this.falls++;
+      this.w += (Math.random() - 0.5) * 4;
+      this.ev('fall');
+      return;
+    }
+    if (Math.abs(q.lat) > lim && (!openSide || this.phase !== 'race')) {
       const sg = Math.sign(q.lat), pen = Math.abs(q.lat) - lim;
       this.x -= q.nx * sg * pen; this.z -= q.nz * sg * pen;
       const vn = (this.vx * q.nx + this.vz * q.nz) * sg;
@@ -205,7 +229,7 @@ export class Sim {
     while (this.cpIndex + 1 < cps.length && q.s >= cps[this.cpIndex + 1]) { this.cpIndex++; this.ev('cp', { n: this.cpIndex }); }
     if (this.phase === 'race' && q.s >= R.finish) {
       this.phase = 'finished';
-      this.ev('finish', { time: this.time, gold: this.gold, pops: this.pops });
+      this.ev('finish', { time: this.time, gold: this.gold, pops: this.pops, falls: this.falls });
     }
   }
 
@@ -229,7 +253,7 @@ export class Sim {
     const r = (v, k = 100) => Math.round(v * k) / k;
     return {
       x: r(this.x), z: r(this.z), a: r(this.a, 1000), vx: r(this.vx), vz: r(this.vz), w: r(this.w),
-      hp: Math.round(this.hp), ph: this.phase, tm: r(this.time), ck: r(this.clock, 1000), cd: r(this.countdown), cp: this.cpIndex, g: this.gold, s: r(this.s, 10), pops: this.pops, inv: this.inv > 0 ? 1 : 0,
+      hp: Math.round(this.hp), ph: this.phase, tm: r(this.time), ck: r(this.clock, 1000), cd: r(this.countdown), cp: this.cpIndex, g: this.gold, s: r(this.s, 10), pops: this.pops, inv: this.inv > 0 ? 1 : 0, fy: r(this.fy || 0),
       st: this.seats.map((st) => [r(st.face, 1000), r(st.gas), st.fart ? 1 : 0, st.turbo > 0 ? 1 : 0]),
     };
   }

@@ -419,8 +419,8 @@ class Game {
     let lan = '';
     if (this.tr.ip && this.tr.ip()) lan = 'WLAN: ' + this.tr.ip();
     if (!this.tr.code) { $('l-code').textContent = lan || '–'; $('l-link').textContent = 'Mitspieler im selben WLAN finden das Spiel unter Online / WLAN.'; $('l-copy').classList.add('hidden'); return; }
-    if (st === 'ready') { $('l-code').textContent = code; $('l-link').textContent = this.inviteLink() + (lan ? ' · ' + lan : ''); $('l-copy').classList.remove('hidden'); }
-    else if (String(st).startsWith('err')) { $('l-code').textContent = '–'; $('l-link').textContent = 'Spielcode nicht verfügbar (keine Verbindung zum Vermittlungsserver).' + (lan ? ' Im WLAN: ' + lan : ''); $('l-copy').classList.add('hidden'); }
+    if (st === 'ready') { $('l-code').textContent = code; $('l-link').textContent = this.inviteLink() + (lan ? ' · ' + lan : '') + (this.tr.via ? ' · Verbindung: ' + this.tr.via() : ''); $('l-copy').classList.remove('hidden'); }
+    else if (String(st).startsWith('err')) { $('l-code').textContent = '–'; $('l-link').textContent = 'Spielcode nicht verfügbar (keine Internetverbindung zu den Servern).' + (lan ? ' Im WLAN: ' + lan : ''); $('l-copy').classList.add('hidden'); }
     else { $('l-code').textContent = '…'; $('l-link').textContent = 'Spielcode wird erstellt …'; $('l-copy').classList.add('hidden'); }
   }
 
@@ -618,6 +618,7 @@ class Game {
   onClient(m) {
     switch (m.t) {
       case '_open': this.send({ t: 'hello', v: 1, locals: this.locals }); this.status('Verbunden – warte auf den Host …'); break;
+      case '_status': this.status(String(m.s || '')); break;
       case '_fail': this.status(isGameCode(this.joinTarget || '') ? 'Kein Spiel mit diesem Code gefunden – Code prüfen.' : 'Verbindung fehlgeschlagen.', true); this.mode = null; this.net = null; break;
       case '_leave':
         this.leave();
@@ -798,6 +799,7 @@ class Game {
       case 'bump': S.bump(e.v || 0.5); this.shake = Math.max(this.shake, 0.15 + (e.v || 0) * 0.3); break;
       case 'hit': S.hit(); this.msg('AUTSCH!', 900); this.shake = 0.5; break;
       case 'pop': S.pop(); this.msg('PENG! Das Boot ist geplatzt!', 2200); this.shake = 1; break;
+      case 'fall': S.fall(); this.msg('AAAAH! Runtergefallen!', 2200); this.shake = 0.6; break;
       case 'respawn': this.msg('Weiter geht\'s!', 1200); break;
       case 'pick': {
         this.collected.add(e.id);
@@ -876,7 +878,7 @@ class Game {
     }
     $('f-stars').innerHTML = [0, 1, 2].map((i) => `<span class="${i < stars ? 'on' : ''}">★</span>`).join('');
     $('f-stats').innerHTML = `<span>Zeit</span><b>${fmtTime(e.time)}${isBest ? ' 🏆' : ''}</b><span>Bestzeit</span><b>${fmtTime(this.best[id].time)}</b>
-      <span>Vorgabe (★)</span><b>${fmtTime(R.par)}</b><span>Goldene Bohnen</span><b>${e.gold} / 3</b><span>Geplatzt</span><b>${e.pops}×</b>`;
+      <span>Vorgabe (★)</span><b>${fmtTime(R.par)}</b><span>Goldene Bohnen</span><b>${e.gold} / 3</b><span>Geplatzt</span><b>${e.pops}×</b>${e.falls ? `<span>Runtergefallen</span><b>${e.falls}×</b>` : ''}`;
     const ctl = this.mode !== 'client';
     for (const id2 of ['f-again', 'f-next', 'f-lobby']) $(id2).classList.toggle('hidden', !ctl);
     $('f-wait').classList.toggle('hidden', ctl);
